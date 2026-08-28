@@ -1,0 +1,3 @@
+[submodule "external/calculator"]
+	path = external/calculator
+	url = https://github.com/microsoft/calculator.git
