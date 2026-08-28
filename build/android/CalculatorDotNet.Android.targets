@@ -28,6 +28,15 @@
     </ItemGroup>
   </Target>
 
+  <Target Name="_CalcShimRemoveDesktopShimFromAndroidNativeLibraries"
+          BeforeTargets="_IncludeNativeSystemLibraries"
+          Condition="'$(_CalcShimIsAndroid)' == 'true'">
+    <ItemGroup>
+      <ResolvedFileToPublish Remove="@(ResolvedFileToPublish)"
+                             Condition="'%(Filename)%(Extension)' == 'libCalcManagerShim.so' and $([System.String]::Copy('%(ResolvedFileToPublish.PathInPackage)').StartsWith('runtimes/'))" />
+    </ItemGroup>
+  </Target>
+
   <Target Name="_CalcShimRemoveHostShimFromAndroidOutput"
           BeforeTargets="_CopySourceItemsToOutputDirectory;_CopyFilesMarkedCopyLocal"
           Condition="'$(_CalcShimIsAndroid)' == 'true'">

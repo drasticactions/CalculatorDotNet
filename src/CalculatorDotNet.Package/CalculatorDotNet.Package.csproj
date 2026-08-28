@@ -59,7 +59,7 @@
       <None Include="@(_CalcShimAppleFile)" Pack="true"
             PackagePath="native/apple/%(RecursiveDir)%(Filename)%(Extension)" />
 
-      <_CalcShimAndroidFile Include="$(_CalcShimStaging)android/**/*" />
+      <_CalcShimAndroidFile Include="$(_CalcShimStaging)android/**/libCalcManagerShim.so" />
       <None Include="@(_CalcShimAndroidFile)" Pack="true"
             PackagePath="native/android/%(RecursiveDir)%(Filename)%(Extension)" />
 
@@ -79,13 +79,13 @@
   </Target>
 
   <ItemGroup>
-    <None Include="build/CalculatorDotNet.props" Pack="true" PackagePath="build/" />
-    <None Include="build/CalculatorDotNet.targets" Pack="true" PackagePath="build/" />
-    <None Include="../../build/apple/CalculatorDotNet.Apple.targets" Pack="true" PackagePath="build/apple/" />
-    <None Include="../../build/android/CalculatorDotNet.Android.targets" Pack="true" PackagePath="build/android/" />
-    <None Include="../../build/android/CalcManagerShim.Android.props" Pack="true" PackagePath="build/android/" />
-    <None Include="../../build/wasm/CalculatorDotNet.Wasm.targets" Pack="true" PackagePath="build/wasm/" />
-    <None Include="../../build/wasm/CalcManagerShim.Wasm.props" Pack="true" PackagePath="build/wasm/" />
+    <None Include="build/CalculatorDotNet.props" Pack="true" PackagePath="build/;buildTransitive/" />
+    <None Include="build/CalculatorDotNet.targets" Pack="true" PackagePath="build/;buildTransitive/" />
+    <None Include="../../build/apple/CalculatorDotNet.Apple.targets" Pack="true" PackagePath="build/apple/;buildTransitive/apple/" />
+    <None Include="../../build/android/CalculatorDotNet.Android.targets" Pack="true" PackagePath="build/android/;buildTransitive/android/" />
+    <None Include="../../build/android/CalcManagerShim.Android.props" Pack="true" PackagePath="build/android/;buildTransitive/android/" />
+    <None Include="../../build/wasm/CalculatorDotNet.Wasm.targets" Pack="true" PackagePath="build/wasm/;buildTransitive/wasm/" />
+    <None Include="../../build/wasm/CalcManagerShim.Wasm.props" Pack="true" PackagePath="build/wasm/;buildTransitive/wasm/" />
   </ItemGroup>
 
 </Project>
