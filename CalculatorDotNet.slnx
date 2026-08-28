@@ -1,0 +1,7 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/CalculatorDotNet/CalculatorDotNet.csproj" />
+    <Project Path="src/CalculatorDotNet.Package/CalculatorDotNet.Package.csproj" />
+    <Project Path="src/CalculatorDotNet.Tests/CalculatorDotNet.Tests.csproj" />
+  </Folder>
+</Solution>

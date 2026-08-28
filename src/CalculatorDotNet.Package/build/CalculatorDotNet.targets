@@ -1,0 +1,8 @@
+<Project>
+
+  <Import Project="$(MSBuildThisFileDirectory)apple/CalculatorDotNet.Apple.targets"
+          Condition="Exists('$(MSBuildThisFileDirectory)apple/CalculatorDotNet.Apple.targets')" />
+  <Import Project="$(MSBuildThisFileDirectory)android/CalculatorDotNet.Android.targets"
+          Condition="Exists('$(MSBuildThisFileDirectory)android/CalculatorDotNet.Android.targets')" />
+
+</Project>

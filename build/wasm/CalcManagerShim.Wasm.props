@@ -1,0 +1,18 @@
+<Project>
+
+  <PropertyGroup>
+    <WasmShimBuildDir Condition="'$(WasmShimBuildDir)' == ''">$(MSBuildThisFileDirectory)../../src/CalculatorDotNet/obj/native/wasm</WasmShimBuildDir>
+
+    <WasmShimLegacyExceptions Condition="'$(WasmShimLegacyExceptions)' == '' and '$(WasmEnableExceptionHandling)' == 'false'">true</WasmShimLegacyExceptions>
+    <WasmShimLegacyExceptions Condition="'$(WasmShimLegacyExceptions)' == ''">false</WasmShimLegacyExceptions>
+  </PropertyGroup>
+
+  <PropertyGroup>
+    <_CalcShimDotnetRoot Condition="'$(_CalcShimDotnetRoot)' == '' and '$(DOTNET_ROOT)' != ''">$(DOTNET_ROOT)</_CalcShimDotnetRoot>
+    <_CalcShimDotnetRoot Condition="'$(_CalcShimDotnetRoot)' == ''">$(NetCoreRoot)</_CalcShimDotnetRoot>
+    <_CalcShimPacksRoot>$([MSBuild]::EnsureTrailingSlash('$(_CalcShimDotnetRoot)'))packs</_CalcShimPacksRoot>
+    <_CalcShimHostRid Condition="'$(_CalcShimHostRid)' == ''">$(NETCoreSdkPortableRuntimeIdentifier)</_CalcShimHostRid>
+    <_CalcShimHostRid Condition="'$(_CalcShimHostRid)' == ''">$(NETCoreSdkRuntimeIdentifier)</_CalcShimHostRid>
+  </PropertyGroup>
+
+</Project>

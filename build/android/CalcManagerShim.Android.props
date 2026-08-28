@@ -1,0 +1,34 @@
+<Project>
+
+  <PropertyGroup>
+    <AndroidShimAbis Condition="'$(AndroidShimAbis)' == ''">arm64-v8a;x86_64</AndroidShimAbis>
+    <AndroidShimMinApi Condition="'$(AndroidShimMinApi)' == ''">21</AndroidShimMinApi>
+
+    <AndroidShimBuildRoot Condition="'$(AndroidShimBuildRoot)' == ''">$(MSBuildThisFileDirectory)../../src/CalculatorDotNet/obj/native/android</AndroidShimBuildRoot>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(AndroidNdkDirectory)' == ''">
+    <AndroidNdkDirectory Condition="'$(ANDROID_NDK_HOME)' != '' and Exists('$(ANDROID_NDK_HOME)/build/cmake/android.toolchain.cmake')">$(ANDROID_NDK_HOME)</AndroidNdkDirectory>
+    <AndroidNdkDirectory Condition="'$(AndroidNdkDirectory)' == '' and '$(ANDROID_NDK_ROOT)' != '' and Exists('$(ANDROID_NDK_ROOT)/build/cmake/android.toolchain.cmake')">$(ANDROID_NDK_ROOT)</AndroidNdkDirectory>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(AndroidNdkDirectory)' == ''">
+    <_CalcShimSdkRoot Condition="'$(ANDROID_HOME)' != ''">$(ANDROID_HOME)</_CalcShimSdkRoot>
+    <_CalcShimSdkRoot Condition="'$(_CalcShimSdkRoot)' == '' and '$(ANDROID_SDK_ROOT)' != ''">$(ANDROID_SDK_ROOT)</_CalcShimSdkRoot>
+    <_CalcShimSdkRoot Condition="'$(_CalcShimSdkRoot)' == '' and $([MSBuild]::IsOSPlatform('Windows')) and Exists('$(LOCALAPPDATA)/Android/Sdk')">$(LOCALAPPDATA)/Android/Sdk</_CalcShimSdkRoot>
+    <_CalcShimSdkRoot Condition="'$(_CalcShimSdkRoot)' == '' and $([MSBuild]::IsOSPlatform('Windows')) and Exists('$(ProgramFiles) (x86)/Android/android-sdk')">$(ProgramFiles) (x86)/Android/android-sdk</_CalcShimSdkRoot>
+    <_CalcShimSdkRoot Condition="'$(_CalcShimSdkRoot)' == '' and $([MSBuild]::IsOSPlatform('OSX')) and Exists('$(HOME)/Library/Android/sdk')">$(HOME)/Library/Android/sdk</_CalcShimSdkRoot>
+    <_CalcShimSdkRoot Condition="'$(_CalcShimSdkRoot)' == '' and $([MSBuild]::IsOSPlatform('Linux')) and Exists('$(HOME)/Android/Sdk')">$(HOME)/Android/Sdk</_CalcShimSdkRoot>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(AndroidNdkDirectory)' == '' and '$(_CalcShimSdkRoot)' != '' and Exists('$(_CalcShimSdkRoot)/ndk')">
+    <_CalcShimNdkList>$([System.IO.Directory]::GetDirectories('$(_CalcShimSdkRoot)/ndk'))</_CalcShimNdkList>
+    <_CalcShimNdkLastIndex Condition="'$(_CalcShimNdkList)' != ''">$([MSBuild]::Subtract($(_CalcShimNdkList.Split(';').Length), 1))</_CalcShimNdkLastIndex>
+    <AndroidNdkDirectory Condition="'$(_CalcShimNdkList)' != ''">$(_CalcShimNdkList.Split(';')[$(_CalcShimNdkLastIndex)])</AndroidNdkDirectory>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(AndroidNdkDirectory)' == '' and '$(_CalcShimSdkRoot)' != '' and Exists('$(_CalcShimSdkRoot)/ndk-bundle/build/cmake/android.toolchain.cmake')">
+    <AndroidNdkDirectory>$(_CalcShimSdkRoot)/ndk-bundle</AndroidNdkDirectory>
+  </PropertyGroup>
+
+</Project>

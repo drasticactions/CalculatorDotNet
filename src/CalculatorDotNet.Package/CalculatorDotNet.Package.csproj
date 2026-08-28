@@ -1,0 +1,91 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <IncludeBuildOutput>false</IncludeBuildOutput>
+    <NoWarn>$(NoWarn);NU5128</NoWarn>
+    <GenerateDocumentationFile>false</GenerateDocumentationFile>
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+    <AssemblyName>CalculatorDotNet.Package</AssemblyName>
+    <PackageId>CalculatorDotNet</PackageId>
+    <Version Condition="'$(Version)' == ''">0.1.0</Version>
+    <Authors>Tim Miller</Authors>
+    <Description>A .NET binding of the Microsoft Calculator engine.</Description>
+    <PackageTags>calculator;calcmanager;arbitrary-precision;unit-conversion;native;interop</PackageTags>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <RepositoryUrl>https://github.com/drasticactions/CalculatorDotNet</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../CalculatorDotNet/CalculatorDotNet.csproj"
+                      PrivateAssets="all" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="../../README.md" Pack="true" PackagePath="/" />
+  </ItemGroup>
+
+  <Target Name="_CalcShimPackManagedAssembly" BeforeTargets="_GetPackageFiles"
+          DependsOnTargets="ResolveProjectReferences">
+    <ItemGroup>
+      <_CalcShimManagedOutput Include="@(_ResolvedProjectReferencePaths)"
+                              Condition="'%(Filename)' == 'CalculatorDotNet'" />
+      <None Include="@(_CalcShimManagedOutput)" Pack="true" PackagePath="lib/$(TargetFramework)/" />
+      <None Include="@(_CalcShimManagedOutput->'%(RootDir)%(Directory)%(Filename).pdb')"
+            Condition="Exists('%(RootDir)%(Directory)%(Filename).pdb')"
+            Pack="true" PackagePath="lib/$(TargetFramework)/" />
+    </ItemGroup>
+  </Target>
+
+  <Target Name="_CalcShimPackNativeAssets" BeforeTargets="_GetPackageFiles">
+    <Error Condition="'$(NativeStagingDir)' == ''"
+           Text="Set NativeStagingDir to the directory holding the prebuilt natives, e.g. -p:NativeStagingDir=artifacts/native. See the comment at the top of this project for the expected layout." />
+    <Error Condition="!Exists('$(NativeStagingDir)')"
+           Text="NativeStagingDir '$(NativeStagingDir)' does not exist." />
+
+    <PropertyGroup>
+      <_CalcShimStaging>$([MSBuild]::EnsureTrailingSlash('$(NativeStagingDir)'))</_CalcShimStaging>
+    </PropertyGroup>
+
+    <ItemGroup>
+      <_CalcShimRuntimeFile Include="$(_CalcShimStaging)runtimes/**/*" />
+      <None Include="@(_CalcShimRuntimeFile)" Pack="true"
+            PackagePath="runtimes/%(RecursiveDir)%(Filename)%(Extension)" />
+
+      <_CalcShimAppleFile Include="$(_CalcShimStaging)apple/**/*" />
+      <None Include="@(_CalcShimAppleFile)" Pack="true"
+            PackagePath="native/apple/%(RecursiveDir)%(Filename)%(Extension)" />
+
+      <_CalcShimAndroidFile Include="$(_CalcShimStaging)android/**/*" />
+      <None Include="@(_CalcShimAndroidFile)" Pack="true"
+            PackagePath="native/android/%(RecursiveDir)%(Filename)%(Extension)" />
+
+      <_CalcShimWasmFile Include="$(_CalcShimStaging)wasm/**/*" />
+      <None Include="@(_CalcShimWasmFile)" Pack="true"
+            PackagePath="native/wasm/%(RecursiveDir)%(Filename)%(Extension)" />
+    </ItemGroup>
+
+    <Warning Condition="'@(_CalcShimRuntimeFile)' == ''"
+             Text="No desktop natives found under '$(_CalcShimStaging)runtimes'. The package will not work via a plain PackageReference." />
+    <Warning Condition="'@(_CalcShimAppleFile)' == ''"
+             Text="No Apple dylibs found under '$(_CalcShimStaging)apple'." />
+    <Warning Condition="'@(_CalcShimAndroidFile)' == ''"
+             Text="No Android natives found under '$(_CalcShimStaging)android'." />
+    <Warning Condition="'@(_CalcShimWasmFile)' == ''"
+             Text="No wasm archive found under '$(_CalcShimStaging)wasm'." />
+  </Target>
+
+  <ItemGroup>
+    <None Include="build/CalculatorDotNet.props" Pack="true" PackagePath="build/" />
+    <None Include="build/CalculatorDotNet.targets" Pack="true" PackagePath="build/" />
+    <None Include="../../build/apple/CalculatorDotNet.Apple.targets" Pack="true" PackagePath="build/apple/" />
+    <None Include="../../build/android/CalculatorDotNet.Android.targets" Pack="true" PackagePath="build/android/" />
+    <None Include="../../build/android/CalcManagerShim.Android.props" Pack="true" PackagePath="build/android/" />
+    <None Include="../../build/wasm/CalculatorDotNet.Wasm.targets" Pack="true" PackagePath="build/wasm/" />
+    <None Include="../../build/wasm/CalcManagerShim.Wasm.props" Pack="true" PackagePath="build/wasm/" />
+  </ItemGroup>
+
+</Project>

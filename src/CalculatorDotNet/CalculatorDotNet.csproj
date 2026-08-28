@@ -1,0 +1,135 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+
+    <!-- The shipping package is assembled by src/CalculatorDotNet.Package, which claims the
+         CalculatorDotNet package id. Two projects cannot both claim it (restore fails with
+         "Ambiguous project name"), and this one is never packed on its own: it produces only
+         the host machine's native shim, whereas the package carries every platform's. -->
+    <IsPackable>false</IsPackable>
+    <PackageId>CalculatorDotNet.Library</PackageId>
+  </PropertyGroup>
+
+  <PropertyGroup>
+    <NativeShimSourceDir>$(MSBuildProjectDirectory)/../native</NativeShimSourceDir>
+    <NativeShimBuildDir>$(MSBuildProjectDirectory)/obj/native/$(Configuration)</NativeShimBuildDir>
+    <NativeShimLibraryName Condition="$([MSBuild]::IsOSPlatform('Linux'))">libCalcManagerShim.so</NativeShimLibraryName>
+    <NativeShimLibraryName Condition="$([MSBuild]::IsOSPlatform('OSX'))">libCalcManagerShim.dylib</NativeShimLibraryName>
+    <NativeShimLibraryName Condition="$([MSBuild]::IsOSPlatform('Windows'))">CalcManagerShim.dll</NativeShimLibraryName>
+  </PropertyGroup>
+
+  <!-- Single-config generators (Makefiles/Ninja) on Linux/macOS: the binary lands in the
+       build dir root and the configuration is chosen at configure time. -->
+  <PropertyGroup Condition="!$([MSBuild]::IsOSPlatform('Windows'))">
+    <NativeShimConfigureArgs>-DCMAKE_BUILD_TYPE=Release</NativeShimConfigureArgs>
+    <NativeShimOutputPath>$(NativeShimBuildDir)/$(NativeShimLibraryName)</NativeShimOutputPath>
+  </PropertyGroup>
+
+  <!-- Windows uses the Visual Studio generator so `dotnet build` works without a vcvars
+       environment. The architecture follows the RuntimeIdentifier (win-x64/win-arm64),
+       defaulting to the host's; each arch gets its own build dir so switching the RID
+       never fights the CMake cache. Multi-config generator, hence the config flag at
+       build time and the Release/ subfolder. -->
+  <PropertyGroup Condition="$([MSBuild]::IsOSPlatform('Windows'))">
+    <NativeShimPlatform Condition="'$(RuntimeIdentifier)' == 'win-x64'">x64</NativeShimPlatform>
+    <NativeShimPlatform Condition="'$(RuntimeIdentifier)' == 'win-arm64'">ARM64</NativeShimPlatform>
+    <NativeShimPlatform Condition="'$(NativeShimPlatform)' == '' and '$([System.Runtime.InteropServices.RuntimeInformation]::OSArchitecture)' == 'Arm64'">ARM64</NativeShimPlatform>
+    <NativeShimPlatform Condition="'$(NativeShimPlatform)' == ''">x64</NativeShimPlatform>
+    <NativeShimBuildDir>$(NativeShimBuildDir)/$(NativeShimPlatform)</NativeShimBuildDir>
+    <NativeShimConfigureArgs>-A $(NativeShimPlatform)</NativeShimConfigureArgs>
+    <NativeShimBuildArgs>--config Release</NativeShimBuildArgs>
+    <NativeShimOutputPath>$(NativeShimBuildDir)/Release/$(NativeShimLibraryName)</NativeShimOutputPath>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- The engine's en-US strings, embedded for the default resource provider. -->
+    <EmbeddedResource Include="../../external/calculator/src/Calculator/Resources/en-US/CEngineStrings.resw"
+                      LogicalName="CalculatorDotNet.CEngineStrings.en-US.resw" />
+  </ItemGroup>
+
+  <!-- Builds the native CalcManager shim with CMake and ships it next to the assembly,
+       including into the output of projects that reference this one. -->
+  <Target Name="BuildNativeShim"
+          BeforeTargets="AssignTargetPaths;GetCopyToOutputDirectoryItems"
+          Condition="'$(NativeShimLibraryName)' != ''">
+    <Exec Command="cmake -S &quot;$(NativeShimSourceDir)&quot; -B &quot;$(NativeShimBuildDir)&quot; $(NativeShimConfigureArgs)" />
+    <Exec Command="cmake --build &quot;$(NativeShimBuildDir)&quot; $(NativeShimBuildArgs) --parallel" />
+    <ItemGroup>
+      <None Include="$(NativeShimOutputPath)"
+            CopyToOutputDirectory="PreserveNewest"
+            TargetPath="$(NativeShimLibraryName)"
+            Visible="false" />
+    </ItemGroup>
+  </Target>
+
+  <!-- Opt-in: `dotnet build -t:BuildAppleShims`. Deliberately not part of the normal
+       build, which only needs the host's own dylib and must not require Xcode. Produces
+       one ad-hoc-signed dylib per Apple slice under artifacts/apple/. -->
+  <Target Name="BuildAppleShims">
+    <Error Condition="!$([MSBuild]::IsOSPlatform('OSX'))"
+           Text="Building the Apple shim dylibs requires macOS with Xcode installed." />
+    <Exec Command="&quot;$(MSBuildProjectDirectory)/../../build/apple/build-dylibs.sh&quot;" />
+  </Target>
+
+  <Import Project="../../build/android/CalcManagerShim.Android.props" />
+
+  <ItemGroup>
+    <AndroidShimAbi Include="$(AndroidShimAbis)" />
+  </ItemGroup>
+
+  <!-- Opt-in: `dotnet build -t:BuildAndroidShim`. Like the Apple target this stays out of
+       the normal build, which only needs the host's own shim and must not require an NDK.
+       Unlike Apple it needs no helper script: the NDK's CMake toolchain runs on every host,
+       so one .so per ABI comes straight out of CMake. The Exec tasks batch over the ABI
+       list, giving one build dir each; consumers pick the results up via
+       CalculatorDotNet.Android.targets. -->
+  <Target Name="BuildAndroidShim">
+    <Error Condition="'$(AndroidNdkDirectory)' == ''"
+           Text="No Android NDK found. Set ANDROID_NDK_HOME (or -p:AndroidNdkDirectory=...) to an NDK containing build/cmake/android.toolchain.cmake, or install one with: sdkmanager --install 'ndk;27.3.13750724'" />
+    <Error Condition="!Exists('$(AndroidNdkDirectory)/build/cmake/android.toolchain.cmake')"
+           Text="'$(AndroidNdkDirectory)' is not a usable NDK: build/cmake/android.toolchain.cmake is missing." />
+    <Error Condition="!Exists('$(NativeShimSourceDir)/../../external/calculator/src/CalcManager/UnitConverter.cpp')"
+           Text="external/calculator is empty. Run: git submodule update --init" />
+
+    <PropertyGroup>
+      <!-- CMake rejects the backslashes MSBuild produces in Windows paths. -->
+      <_AndroidNdkCMakePath>$(AndroidNdkDirectory.Replace('\', '/'))</_AndroidNdkCMakePath>
+    </PropertyGroup>
+
+    <Message Importance="high" Text="Building CalcManagerShim for Android %(AndroidShimAbi.Identity) (API $(AndroidShimMinApi), NDK $(AndroidNdkDirectory))" />
+
+    <!-- "Unix Makefiles" with the NDK's bundled make keeps this working on a bare Windows
+         box, where CMake would otherwise default to a Visual Studio generator that cannot
+         drive the NDK's clang. -->
+    <Exec Command="cmake -S &quot;$(NativeShimSourceDir)&quot; -B &quot;$(AndroidShimBuildRoot)/%(AndroidShimAbi.Identity)&quot; -G &quot;Unix Makefiles&quot; -DCMAKE_TOOLCHAIN_FILE=&quot;$(_AndroidNdkCMakePath)/build/cmake/android.toolchain.cmake&quot; -DANDROID_ABI=%(AndroidShimAbi.Identity) -DANDROID_PLATFORM=android-$(AndroidShimMinApi) -DCMAKE_BUILD_TYPE=Release $(AndroidShimMakeProgramArg)" />
+    <Exec Command="cmake --build &quot;$(AndroidShimBuildRoot)/%(AndroidShimAbi.Identity)&quot; --parallel" />
+  </Target>
+
+  <Import Project="../../build/wasm/CalcManagerShim.Wasm.props" />
+
+  <!-- Opt-in: `dotnet build -t:BuildWasmShim`. Produces a static archive rather than a
+       shared library, because wasm has no dlopen: the .NET wasm SDK links native code into
+       dotnet.native.wasm when the app relinks. Emscripten comes from the wasm-tools
+       workload, so the discovery lives in a script rather than inline MSBuild. -->
+  <Target Name="BuildWasmShim">
+    <PropertyGroup>
+      <_WasmShimArgs>-BuildDir "$(WasmShimBuildDir)" -SdkVersion "$(NETCoreSdkVersion)"</_WasmShimArgs>
+      <_WasmShimArgs Condition="'$(WasmShimLegacyExceptions)' == 'true'">$(_WasmShimArgs) -LegacyExceptions</_WasmShimArgs>
+    </PropertyGroup>
+    <Exec Command="pwsh -NoProfile -ExecutionPolicy Bypass -File &quot;$(MSBuildProjectDirectory)/../../build/wasm/build-wasm-archive.ps1&quot; $(_WasmShimArgs)" />
+  </Target>
+
+  <!-- Point CMake at the NDK's own make so a Windows host needs nothing else installed. -->
+  <Target Name="_ResolveAndroidMakeProgram" BeforeTargets="BuildAndroidShim"
+          Condition="$([MSBuild]::IsOSPlatform('Windows')) and '$(AndroidNdkDirectory)' != ''">
+    <PropertyGroup>
+      <_AndroidNdkMake>$(AndroidNdkDirectory.Replace('\', '/'))/prebuilt/windows-x86_64/bin/make.exe</_AndroidNdkMake>
+      <AndroidShimMakeProgramArg Condition="Exists('$(_AndroidNdkMake)')">-DCMAKE_MAKE_PROGRAM=&quot;$(_AndroidNdkMake)&quot;</AndroidShimMakeProgramArg>
+    </PropertyGroup>
+  </Target>
+
+</Project>

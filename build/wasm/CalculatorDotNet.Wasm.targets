@@ -1,0 +1,52 @@
+<Project>
+
+  <Import Project="CalcManagerShim.Wasm.props" />
+  <PropertyGroup>
+    <_CalcShimWasmPlatform>$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)'))</_CalcShimWasmPlatform>
+    <_CalcShimIsWasm>false</_CalcShimIsWasm>
+    <_CalcShimIsWasm Condition="'$(RuntimeIdentifier)' == 'browser-wasm' or '$(_CalcShimWasmPlatform)' == 'browser'">true</_CalcShimIsWasm>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(_CalcShimIsWasm)' == 'true'">
+    <_CalcShimWasmArchive>$(WasmShimBuildDir)/CalcManagerShim.a</_CalcShimWasmArchive>
+  </PropertyGroup>
+  <ItemGroup Condition="'$(_CalcShimIsWasm)' == 'true'">
+    <NativeFileReference Include="$(_CalcShimWasmArchive)" Condition="Exists('$(_CalcShimWasmArchive)')" />
+  </ItemGroup>
+  <Target Name="_CalcShimVerifyWasmArchive"
+          BeforeTargets="ResolveReferences;WasmLinkDotNet;_WasmBuildAppCore"
+          Condition="'$(_CalcShimIsWasm)' == 'true'">
+    <Error Condition="!Exists('$(_CalcShimWasmArchive)')"
+           Text="CalcManagerShim.a was not found at '$(_CalcShimWasmArchive)'. Run: dotnet build src/CalculatorDotNet/CalculatorDotNet.csproj -t:BuildWasmShim" />
+    <PropertyGroup>
+      <_CalcShimWasmModeFile>$(WasmShimBuildDir)/exception-mode.txt</_CalcShimWasmModeFile>
+      <_CalcShimBuiltWasmMode Condition="Exists('$(_CalcShimWasmModeFile)')">$([System.IO.File]::ReadAllText('$(_CalcShimWasmModeFile)').Trim())</_CalcShimBuiltWasmMode>
+      <_CalcShimWantedWasmMode>wasm-eh</_CalcShimWantedWasmMode>
+      <_CalcShimWantedWasmMode Condition="'$(WasmEnableExceptionHandling)' == 'false'">legacy</_CalcShimWantedWasmMode>
+      <_CalcShimNeededLegacyFlag>false</_CalcShimNeededLegacyFlag>
+      <_CalcShimNeededLegacyFlag Condition="'$(_CalcShimWantedWasmMode)' == 'legacy'">true</_CalcShimNeededLegacyFlag>
+    </PropertyGroup>
+
+    <Error Condition="'$(_CalcShimBuiltWasmMode)' != '' and '$(_CalcShimBuiltWasmMode)' != '$(_CalcShimWantedWasmMode)'"
+           Text="CalcManagerShim.a was built for '$(_CalcShimBuiltWasmMode)' exceptions but this app needs '$(_CalcShimWantedWasmMode)'. Rebuild it with: dotnet build src/CalculatorDotNet/CalculatorDotNet.csproj -t:BuildWasmShim -p:WasmShimLegacyExceptions=$(_CalcShimNeededLegacyFlag)" />
+  </Target>
+  <Target Name="_CalcShimRemoveHostShimFromWasmOutput"
+          BeforeTargets="_CopySourceItemsToOutputDirectory;_CopyFilesMarkedCopyLocal"
+          Condition="'$(_CalcShimIsWasm)' == 'true'">
+    <ItemGroup>
+      <_SourceItemsToCopyToOutputDirectory Remove="@(_SourceItemsToCopyToOutputDirectory)"
+                                           Condition="'%(Filename)' == 'libCalcManagerShim' or '%(Filename)' == 'CalcManagerShim'" />
+      <ReferenceCopyLocalPaths Remove="@(ReferenceCopyLocalPaths)"
+                               Condition="'%(Filename)' == 'libCalcManagerShim' or '%(Filename)' == 'CalcManagerShim'" />
+    </ItemGroup>
+  </Target>
+
+  <Target Name="_CalcShimRemoveHostShimFromWasmPublish"
+          BeforeTargets="_ComputePublishLocation"
+          Condition="'$(_CalcShimIsWasm)' == 'true'">
+    <ItemGroup>
+      <ResolvedFileToPublish Remove="@(ResolvedFileToPublish)"
+                             Condition="'%(Filename)' == 'libCalcManagerShim' or '%(Filename)' == 'CalcManagerShim'" />
+    </ItemGroup>
+  </Target>
+
+</Project>

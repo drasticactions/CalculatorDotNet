@@ -1,0 +1,22 @@
+<Project>
+
+  <PropertyGroup>
+    <_CalcShimPackageNative>$([MSBuild]::EnsureTrailingSlash('$(MSBuildThisFileDirectory)..'))native/</_CalcShimPackageNative>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(CalcManagerShimAppleDylibRoot)' == '' and Exists('$(_CalcShimPackageNative)apple')">
+    <CalcManagerShimAppleDylibRoot>$(_CalcShimPackageNative)apple</CalcManagerShimAppleDylibRoot>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(AndroidShimBuildRoot)' == '' and Exists('$(_CalcShimPackageNative)android')">
+    <AndroidShimBuildRoot>$(_CalcShimPackageNative)android</AndroidShimBuildRoot>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(WasmShimBuildDir)' == '' and Exists('$(_CalcShimPackageNative)wasm')">
+    <WasmShimBuildDir>$(_CalcShimPackageNative)wasm</WasmShimBuildDir>
+  </PropertyGroup>
+
+  <Import Project="$(MSBuildThisFileDirectory)wasm/CalculatorDotNet.Wasm.targets"
+          Condition="Exists('$(MSBuildThisFileDirectory)wasm/CalculatorDotNet.Wasm.targets')" />
+
+</Project>

@@ -1,0 +1,59 @@
+<Project>
+
+  <PropertyGroup Condition="'$(CalcManagerShimAppleDylibRoot)' == ''">
+    <CalcManagerShimAppleDylibRoot>$(MSBuildThisFileDirectory)../../artifacts/apple</CalcManagerShimAppleDylibRoot>
+  </PropertyGroup>
+
+  <PropertyGroup>
+    <_CalcShimPlatform>$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)'))</_CalcShimPlatform>
+    <_CalcShimApplePlatform>false</_CalcShimApplePlatform>
+    <_CalcShimApplePlatform Condition="'$(_CalcShimPlatform)' == 'ios' or '$(_CalcShimPlatform)' == 'maccatalyst'">true</_CalcShimApplePlatform>
+  </PropertyGroup>
+
+  <ItemGroup Condition="'$(_CalcShimApplePlatform)' == 'true'">
+    <NativeReference Include="$(CalcManagerShimAppleDylibRoot)/maccatalyst/libCalcManagerShim.dylib"
+                     Kind="Dynamic"
+                     Condition="'$(_CalcShimPlatform)' == 'maccatalyst'" />
+    <NativeReference Include="$(CalcManagerShimAppleDylibRoot)/iossimulator/libCalcManagerShim.dylib"
+                     Kind="Dynamic"
+                     RelativePath="libCalcManagerShim.dylib"
+                     Condition="'$(_CalcShimPlatform)' == 'ios' and $(RuntimeIdentifier.StartsWith('iossimulator'))" />
+    <NativeReference Include="$(CalcManagerShimAppleDylibRoot)/ios/libCalcManagerShim.dylib"
+                     Kind="Dynamic"
+                     RelativePath="libCalcManagerShim.dylib"
+                     Condition="'$(_CalcShimPlatform)' == 'ios' and !$(RuntimeIdentifier.StartsWith('iossimulator'))" />
+  </ItemGroup>
+
+  <Target Name="_CalcShimRemoveHostShimFromOutput"
+          BeforeTargets="_CopySourceItemsToOutputDirectory;_CopyFilesMarkedCopyLocal"
+          Condition="'$(_CalcShimApplePlatform)' == 'true'">
+    <ItemGroup>
+      <_SourceItemsToCopyToOutputDirectory Remove="@(_SourceItemsToCopyToOutputDirectory)"
+                                           Condition="'%(Filename)' == 'libCalcManagerShim'" />
+      <ReferenceCopyLocalPaths Remove="@(ReferenceCopyLocalPaths)"
+                               Condition="'%(Filename)' == 'libCalcManagerShim'" />
+    </ItemGroup>
+  </Target>
+
+  <Target Name="_CalcShimRemoveHostShimFromPublish"
+          BeforeTargets="_ComputePublishLocation"
+          Condition="'$(_CalcShimApplePlatform)' == 'true'">
+    <ItemGroup>
+      <ResolvedFileToPublish Remove="@(ResolvedFileToPublish)"
+                             Condition="'%(Filename)' == 'libCalcManagerShim'" />
+    </ItemGroup>
+  </Target>
+
+  <Target Name="_CalcShimVerifyDylib"
+          BeforeTargets="ResolveReferences"
+          Condition="'$(_CalcShimApplePlatform)' == 'true'">
+    <PropertyGroup>
+      <_CalcShimSlice Condition="'$(_CalcShimPlatform)' == 'maccatalyst'">maccatalyst</_CalcShimSlice>
+      <_CalcShimSlice Condition="'$(_CalcShimPlatform)' == 'ios'">ios</_CalcShimSlice>
+      <_CalcShimSlice Condition="'$(_CalcShimPlatform)' == 'ios' and $(RuntimeIdentifier.StartsWith('iossimulator'))">iossimulator</_CalcShimSlice>
+    </PropertyGroup>
+    <Error Condition="!Exists('$(CalcManagerShimAppleDylibRoot)/$(_CalcShimSlice)/libCalcManagerShim.dylib')"
+           Text="The CalcManagerShim dylib for '$(_CalcShimSlice)' was not found under '$(CalcManagerShimAppleDylibRoot)'. Run build/apple/build-dylibs.sh, or set $(CalcManagerShimAppleDylibRoot)." />
+  </Target>
+
+</Project>

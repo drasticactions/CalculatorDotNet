@@ -1,0 +1,51 @@
+<Project>
+
+  <Import Project="CalcManagerShim.Android.props" />
+
+  <PropertyGroup>
+    <_CalcShimPlatform>$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)'))</_CalcShimPlatform>
+    <_CalcShimIsAndroid>false</_CalcShimIsAndroid>
+    <_CalcShimIsAndroid Condition="'$(_CalcShimPlatform)' == 'android'">true</_CalcShimIsAndroid>
+  </PropertyGroup>
+
+  <Target Name="_CalcShimAddAndroidNativeLibraries"
+          BeforeTargets="ResolveReferences"
+          Condition="'$(_CalcShimIsAndroid)' == 'true'">
+    <ItemGroup>
+      <_CalcShimAndroidAbi Include="$(AndroidShimAbis)" />
+      <_CalcShimAndroidSo Include="$(AndroidShimBuildRoot)/%(_CalcShimAndroidAbi.Identity)/libCalcManagerShim.so">
+        <Abi>%(_CalcShimAndroidAbi.Identity)</Abi>
+      </_CalcShimAndroidSo>
+    </ItemGroup>
+
+    <Error Condition="'@(_CalcShimAndroidSo)' == ''"
+           Text="No Android ABIs configured. Set $(AndroidShimAbis)." />
+    <Error Condition="!Exists('%(_CalcShimAndroidSo.Identity)')"
+           Text="libCalcManagerShim.so for %(_CalcShimAndroidSo.Abi) was not found at '%(_CalcShimAndroidSo.Identity)'. Run: dotnet build src/CalculatorDotNet/CalculatorDotNet.csproj -t:BuildAndroidShim" />
+
+    <ItemGroup>
+      <AndroidNativeLibrary Include="@(_CalcShimAndroidSo)" />
+    </ItemGroup>
+  </Target>
+
+  <Target Name="_CalcShimRemoveHostShimFromAndroidOutput"
+          BeforeTargets="_CopySourceItemsToOutputDirectory;_CopyFilesMarkedCopyLocal"
+          Condition="'$(_CalcShimIsAndroid)' == 'true'">
+    <ItemGroup>
+      <_SourceItemsToCopyToOutputDirectory Remove="@(_SourceItemsToCopyToOutputDirectory)"
+                                           Condition="'%(Filename)' == 'libCalcManagerShim' or '%(Filename)' == 'CalcManagerShim'" />
+      <ReferenceCopyLocalPaths Remove="@(ReferenceCopyLocalPaths)"
+                               Condition="'%(Filename)' == 'libCalcManagerShim' or '%(Filename)' == 'CalcManagerShim'" />
+    </ItemGroup>
+  </Target>
+
+  <Target Name="_CalcShimRemoveHostShimFromAndroidPublish"
+          BeforeTargets="_ComputePublishLocation"
+          Condition="'$(_CalcShimIsAndroid)' == 'true'">
+    <ItemGroup>
+      <ResolvedFileToPublish Remove="@(ResolvedFileToPublish)"
+                             Condition="'%(Filename)' == 'libCalcManagerShim' or '%(Filename)' == 'CalcManagerShim'" />
+    </ItemGroup>
+  </Target>
+
+</Project>

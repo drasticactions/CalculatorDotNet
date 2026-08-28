@@ -1,0 +1,220 @@
+name: Package
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: NuGet package version
+        required: true
+        default: 0.1.0
+        type: string
+      desktop:
+        description: Build desktop RIDs (win/linux)
+        type: boolean
+        default: true
+      apple:
+        description: Build Apple dylibs
+        type: boolean
+        default: true
+      android:
+        description: Build Android ABIs
+        type: boolean
+        default: true
+      wasm:
+        description: Build wasm archive
+        type: boolean
+        default: true
+
+env:
+  DOTNET_NOLOGO: true
+  DOTNET_SKIP_FIRST_TIME_EXPERIENCE: true
+
+jobs:
+  desktop:
+    name: ${{ matrix.rid }}
+    if: ${{ inputs.desktop }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { rid: win-x64,     os: windows-latest }
+          - { rid: win-arm64,   os: windows-11-arm }
+          - { rid: linux-x64,   os: ubuntu-latest }
+          - { rid: linux-arm64, os: ubuntu-24.04-arm }
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: true
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+
+      - name: Test
+        if: matrix.rid == 'linux-x64'
+        run: dotnet test --configuration Release
+
+      - name: Build native shim
+        shell: bash
+        run: dotnet build src/CalculatorDotNet/CalculatorDotNet.csproj -c Release -r ${{ matrix.rid }}
+
+      - name: Stage native
+        shell: bash
+        run: |
+          set -euo pipefail
+          args=(-p:Configuration=Release -p:RuntimeIdentifier=${{ matrix.rid }} -getProperty:NativeShimOutputPath)
+          shim=$(dotnet msbuild src/CalculatorDotNet/CalculatorDotNet.csproj "${args[@]}" | tr -d '\r')
+          echo "shim: $shim"
+          if [ ! -f "$shim" ]; then
+            echo "::error::no native shim at '$shim' for ${{ matrix.rid }}"
+            exit 1
+          fi
+          dest="staging/runtimes/${{ matrix.rid }}/native"
+          mkdir -p "$dest"
+          cp "$shim" "$dest/"
+          ls -l "$dest"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: native-${{ matrix.rid }}
+          path: staging/
+          if-no-files-found: error
+
+  apple:
+    name: apple-dylibs
+    if: ${{ inputs.apple }}
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: true
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+
+      - name: Build Apple dylibs
+        run: ./build/apple/build-dylibs.sh
+
+      - name: Stage
+        run: |
+          set -euo pipefail
+          mkdir -p staging/runtimes/osx/native
+          cp artifacts/apple/macos/libCalcManagerShim.dylib staging/runtimes/osx/native/
+          for slice in ios iossimulator maccatalyst; do
+            mkdir -p "staging/apple/$slice"
+            cp "artifacts/apple/$slice/libCalcManagerShim.dylib" "staging/apple/$slice/"
+          done
+          find staging -type f | sort
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: native-apple
+          path: staging/
+          if-no-files-found: error
+
+  android:
+    if: ${{ inputs.android }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: true
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+
+      - name: Build Android shims
+        run: dotnet build src/CalculatorDotNet/CalculatorDotNet.csproj -t:BuildAndroidShim
+
+      - name: Stage
+        run: |
+          set -euo pipefail
+          mkdir -p staging/android
+          cp -R src/CalculatorDotNet/obj/native/android/* staging/android/
+          find staging/android -name '*.so' | sort
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: native-android
+          path: staging/
+          if-no-files-found: error
+
+  wasm:
+    if: ${{ inputs.wasm }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: true
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+
+      - name: Install wasm-tools
+        run: dotnet workload install wasm-tools
+
+      - name: Install ninja
+        run: sudo apt-get update && sudo apt-get install -y ninja-build
+
+      - name: Build wasm archive
+        run: dotnet build src/CalculatorDotNet/CalculatorDotNet.csproj -t:BuildWasmShim
+
+      - name: Stage
+        run: |
+          set -euo pipefail
+          mkdir -p staging/wasm
+          cp src/CalculatorDotNet/obj/native/wasm/CalcManagerShim.a staging/wasm/
+          cp src/CalculatorDotNet/obj/native/wasm/exception-mode.txt staging/wasm/
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: native-wasm
+          path: staging/
+          if-no-files-found: error
+
+  pack:
+    needs: [desktop, apple, android, wasm]
+    if: ${{ !cancelled() && !contains(needs.*.result, 'failure') }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: true
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: native-*
+          merge-multiple: true
+          path: staging
+
+      - name: Show staged natives
+        run: find staging -type f | sort
+
+      - name: Pack
+        run: |
+          dotnet pack src/CalculatorDotNet.Package/CalculatorDotNet.Package.csproj \
+            -c Release \
+            -p:Version=${{ inputs.version }} \
+            -p:NativeStagingDir=$GITHUB_WORKSPACE/staging \
+            -o nupkg
+
+      - name: Show package contents
+        run: |
+          set -euo pipefail
+          pkg=$(ls nupkg/*.nupkg)
+          echo "== $pkg"
+          unzip -l "$pkg"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: nupkg
+          path: nupkg/*.nupkg
+          if-no-files-found: error
